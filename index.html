@@ -13,7 +13,7 @@
 <link id="apple-touch-icon" rel="apple-touch-icon">
 <link id="manifest-link" rel="manifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;600;700&family=Work+Sans:wght@400;500;600;700&family=Caveat:wght@600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <!-- Firebase (banco de dados compartilhado opcional — veja FIREBASE_CONFIG no script principal, no final do arquivo) -->
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
@@ -310,26 +310,27 @@
     font-size:11px; font-weight:700; letter-spacing:.4px; text-transform:uppercase;
     color:#fff; margin-right:6px;
   }
-  .edit-wrap{ position:relative; }
+  .btn-home{ flex:none; }
   .editor-panel{
     display:none;
-    flex-direction:column;
-    gap:10px;
-    position:absolute;
-    top:calc(100% + 8px);
-    left:50%;
-    transform: translateX(-50%);
+    flex-wrap:wrap;
+    gap:16px 28px;
+    align-items:center;
     background: var(--white);
     border:1px solid var(--paper-line-strong);
     border-radius:10px;
     padding:14px 16px;
     box-shadow: var(--shadow);
-    width:max-content;
-    min-width:220px;
-    max-width: calc(100vw - 32px);
-    z-index:60;
+    margin-bottom:18px;
   }
   .editor-panel.open{ display:flex; }
+  .editor-panel .editor-hint{
+    flex-basis:100%;
+    margin:2px 0 0;
+    padding-top:10px;
+    border-top:1px dashed var(--paper-line-strong);
+    font-size:11.5px; color: var(--ink-soft); line-height:1.4;
+  }
   .editor-row{
     display:flex; align-items:center; justify-content:space-between; gap:14px;
   }
@@ -337,11 +338,6 @@
     font-size:12.5px; font-weight:600; color: var(--green-800);
   }
   .editor-row .stepper{ display:flex; gap:3px; }
-  .editor-hint{
-    margin:2px 0 0; padding-top:10px;
-    border-top:1px dashed var(--paper-line-strong);
-    font-size:11.5px; color: var(--ink-soft); line-height:1.4;
-  }
 
   .room-canvas{
     position:relative;
@@ -466,8 +462,9 @@
   .seat{
     width:88px;
     display:flex; flex-direction:column; align-items:center; gap:4px;
-    cursor:pointer;
+    cursor:default;
   }
+  .edit-mode .seat{ cursor:pointer; }
   .seat-clear{
     position:absolute; top:-8px; right:-8px;
     width:20px; height:20px; padding:0;
@@ -526,24 +523,24 @@
   }
   .seat:hover .desk{ transform: translateY(-1px); }
   .desk .name{
-    font-family:'Caveat', cursive;
-    font-size:16.5px;
-    font-weight:600;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size:13.5px;
+    font-weight:700;
     color: var(--navy-dark);
     text-align:center;
-    line-height:1.05;
+    line-height:1.15;
     max-width:100%;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
   .desk .name.empty{
-    color:#6B7686; font-family:'Work Sans',sans-serif; font-size:10.5px;
+    color:#6B7686; font-family: Arial, Helvetica, sans-serif; font-size:10.5px;
     font-weight:600; letter-spacing:.4px; text-transform:uppercase; opacity:.7;
   }
   .desk.editing{ padding:0; }
   .desk input{
     width:100%; height:100%;
     border:none; background:transparent; text-align:center;
-    font-family:'Caveat', cursive; font-size:17px; font-weight:600; color: var(--navy-dark);
+    font-family: Arial, Helvetica, sans-serif; font-size:13.5px; font-weight:700; color: var(--navy-dark);
     outline:none;
   }
   .desk.filled{ outline: 2px solid transparent; }
@@ -598,13 +595,16 @@
     .btn-primary#btn-abrir{ width:100%; padding:12px 18px; }
 
     .toolbar{ padding:10px 12px; gap:8px; }
+    .btn-home{ order:-2; }
     .toolbar .title-block{ min-width:100%; order:-1; }
     .toolbar h3{ font-size:17px; }
     #busca{ flex:1 1 100%; max-width:none; order:1; }
-    .edit-wrap{ order:2; }
+    #btn-editar{ order:2; }
     #btn-print{ order:3; }
     .btn{ min-height:38px; }
     .btn-icon{ width:34px; height:34px; }
+    .editor-panel{ gap:12px 18px; padding:12px 14px; }
+    .editor-row{ flex:1 1 45%; }
 
     .scroll-hint{ display:block; }
     .room-canvas{
@@ -1236,47 +1236,46 @@
 
       wrap.innerHTML =
         '<div class="toolbar">' +
+          '<button class="btn btn-outline btn-sm btn-home" id="btn-home" title="Voltar para Selecionar">🏠 Página inicial</button>' +
           '<div class="title-block">' +
             '<h3>'+escapeHtml(tab.turma)+'</h3>' +
             '<div class="meta"><span class="badge" style="background:'+info.color+'">'+info.label+'</span>' +
               filled + ' de ' + total + ' assentos preenchidos</div>' +
           '</div>' +
           '<input type="text" id="busca" placeholder="Buscar aluno…" style="max-width:180px;">' +
-          '<div class="edit-wrap">' +
-            '<button class="btn btn-outline btn-sm" id="btn-editar">✎ Editar sala</button>' +
-            '<div class="editor-panel'+(uiState.editOpen?' open':'')+'" id="editor-panel">' +
-              '<div class="editor-row">' +
-                '<span class="editor-label">Linhas</span>' +
-                '<span class="stepper">' +
-                  '<button class="btn btn-outline btn-icon" data-adj="rows" data-d="-1">–</button>' +
-                  '<button class="btn btn-outline btn-icon" data-adj="rows" data-d="1">+</button>' +
-                '</span>' +
-              '</div>' +
-              '<div class="editor-row">' +
-                '<span class="editor-label">Colunas</span>' +
-                '<span class="stepper">' +
-                  '<button class="btn btn-outline btn-icon" data-adj="cols" data-d="-1">–</button>' +
-                  '<button class="btn btn-outline btn-icon" data-adj="cols" data-d="1">+</button>' +
-                '</span>' +
-              '</div>' +
-              '<div class="editor-row">' +
-                '<span class="editor-label">Porta</span>' +
-                '<select id="sel-porta" class="side-select">' +
-                  '<option value="left"'+(layout.doorSide==='left'?' selected':'')+'>Esquerda</option>' +
-                  '<option value="right"'+(layout.doorSide==='right'?' selected':'')+'>Direita</option>' +
-                '</select>' +
-              '</div>' +
-              '<div class="editor-row">' +
-                '<span class="editor-label">Janela</span>' +
-                '<select id="sel-janela" class="side-select">' +
-                  '<option value="left"'+(layout.windowSide==='left'?' selected':'')+'>Esquerda</option>' +
-                  '<option value="right"'+(layout.windowSide==='right'?' selected':'')+'>Direita</option>' +
-                '</select>' +
-              '</div>' +
-              '<p class="editor-hint">Com a sala em edição, você pode excluir ou recolocar mesas individuais no mapa.</p>' +
-            '</div>' +
-          '</div>' +
+          '<button class="btn btn-outline btn-sm" id="btn-editar">✎ Editar sala</button>' +
           '<button class="btn btn-outline btn-sm" id="btn-print">🖨 Imprimir</button>' +
+        '</div>' +
+        '<div class="editor-panel'+(uiState.editOpen?' open':'')+'" id="editor-panel">' +
+          '<div class="editor-row">' +
+            '<span class="editor-label">Linhas</span>' +
+            '<span class="stepper">' +
+              '<button class="btn btn-outline btn-icon" data-adj="rows" data-d="-1">–</button>' +
+              '<button class="btn btn-outline btn-icon" data-adj="rows" data-d="1">+</button>' +
+            '</span>' +
+          '</div>' +
+          '<div class="editor-row">' +
+            '<span class="editor-label">Colunas</span>' +
+            '<span class="stepper">' +
+              '<button class="btn btn-outline btn-icon" data-adj="cols" data-d="-1">–</button>' +
+              '<button class="btn btn-outline btn-icon" data-adj="cols" data-d="1">+</button>' +
+            '</span>' +
+          '</div>' +
+          '<div class="editor-row">' +
+            '<span class="editor-label">Porta</span>' +
+            '<select id="sel-porta" class="side-select">' +
+              '<option value="left"'+(layout.doorSide==='left'?' selected':'')+'>Esquerda</option>' +
+              '<option value="right"'+(layout.doorSide==='right'?' selected':'')+'>Direita</option>' +
+            '</select>' +
+          '</div>' +
+          '<div class="editor-row">' +
+            '<span class="editor-label">Janela</span>' +
+            '<select id="sel-janela" class="side-select">' +
+              '<option value="left"'+(layout.windowSide==='left'?' selected':'')+'>Esquerda</option>' +
+              '<option value="right"'+(layout.windowSide==='right'?' selected':'')+'>Direita</option>' +
+            '</select>' +
+          '</div>' +
+          '<p class="editor-hint">Com a sala em edição, você pode editar nomes, excluir ou recolocar mesas individuais no mapa.</p>' +
         '</div>' +
         '<p class="scroll-hint">↔ Arraste para o lado para ver a sala inteira</p>' +
         '<div class="canvas-scroll">' +
@@ -1294,6 +1293,10 @@
 
       renderWalls(wrap, layout);
       buildDesksGrid(wrap, tab, layout);
+
+      wrap.querySelector('#btn-home').addEventListener('click', function(){
+        switchTab('home');
+      });
 
       var btnEditar = wrap.querySelector('#btn-editar');
       var editorPanel = wrap.querySelector('#editor-panel');
@@ -1395,6 +1398,8 @@
     if (deskEl){
       deskEl.addEventListener('click', function(e){
         if (e.target && e.target.closest && e.target.closest('.seat-clear')) return;
+        var canvas = wrap.querySelector('#room-canvas');
+        if (!canvas || !canvas.classList.contains('edit-mode')) return; // só edita nomes em modo edição
         activateDeskEdit(this, tab, layout, wrap);
       });
       attachClearBtnHandler(deskEl, tab, layout, wrap);
@@ -1598,8 +1603,9 @@
   console.log('[Mapa de Sala] Modo de armazenamento ativo no carregamento:', STORAGE_MODE, '| Firebase configurado:', isFirebaseConfigured());
 
   document.addEventListener('click', function(e){
-    var insideEditWrap = e.target.closest && e.target.closest('.edit-wrap');
-    if (!insideEditWrap){
+    var t = e.target;
+    var insideEditArea = t.closest && (t.closest('#editor-panel') || t.closest('#btn-editar') || t.closest('#room-canvas'));
+    if (!insideEditArea){
       document.querySelectorAll('.editor-panel.open').forEach(function(p){ p.classList.remove('open'); });
       document.querySelectorAll('.room-canvas.edit-mode').forEach(function(rc){ rc.classList.remove('edit-mode'); });
       Object.keys(roomUiState).forEach(function(id){ roomUiState[id].editOpen = false; });

@@ -1625,15 +1625,6 @@
   console.log('[Mapa de Sala] Digite mapaDeSalaDebug() no console para diagnosticar o armazenamento.');
   console.log('[Mapa de Sala] Modo de armazenamento ativo no carregamento:', STORAGE_MODE, '| Firebase configurado:', isFirebaseConfigured());
 
-  document.addEventListener('click', function(e){
-    var t = e.target;
-    var insideEditArea = t.closest && (t.closest('#editor-panel') || t.closest('#btn-editar') || t.closest('#room-canvas'));
-    if (!insideEditArea){
-      document.querySelectorAll('.editor-panel.open').forEach(function(p){ p.classList.remove('open'); });
-      document.querySelectorAll('.room-canvas.edit-mode').forEach(function(rc){ rc.classList.remove('edit-mode'); });
-      Object.keys(roomUiState).forEach(function(id){ roomUiState[id].editOpen = false; });
-    }
-  });
   renderTabs();
   renderMain();
   setupPwaManifest();

@@ -8,7 +8,7 @@
 // mesmo sem internet (os dados dos alunos continuam sendo salvos normalmente
 // pelo navegador, isso aqui só cuida do "abrir o app offline").
 
-const CACHE_NAME = 'mapa-de-sala-v3';
+const CACHE_NAME = 'mapa-de-sala-v4';
 const APP_SHELL = [
   './',
   './mapa-de-sala.html'

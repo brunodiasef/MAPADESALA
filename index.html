@@ -14,6 +14,9 @@
 <link id="manifest-link" rel="manifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;600;700&family=Work+Sans:wght@400;500;600;700&family=Caveat:wght@600;700&display=swap" rel="stylesheet">
+<!-- Firebase (banco de dados compartilhado opcional — veja FIREBASE_CONFIG no script principal, no final do arquivo) -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
 <style>
   :root{
     --green-900:#152B1E;
@@ -689,10 +692,56 @@
     return TURNOS[0];
   }
 
+  /* ============ BANCO DE DADOS COMPARTILHADO (opcional) ============ */
+  // Preencha os campos abaixo com as informações do SEU projeto Firebase para que
+  // TODOS os computadores/celulares que abrirem este app vejam o mesmo mapa de sala.
+  // Passo a passo: https://console.firebase.google.com → criar projeto → Realtime Database
+  // → criar banco → copiar as informações de configuração do app aqui embaixo.
+  // Se deixar como está (sem preencher), o app continua funcionando normalmente,
+  // só que salvando os dados apenas neste navegador (como já fazia antes).
+  var FIREBASE_CONFIG = {
+    apiKey: "AIzaSyDBekKuPiwHTURiQcmAYdWb9fkbmKpx4lQ",
+    authDomain: "mapa-de-sala-1da4c.firebaseapp.com",
+    databaseURL: "https://mapa-de-sala-1da4c-default-rtdb.firebaseio.com",
+    projectId: "mapa-de-sala-1da4c",
+    storageBucket: "mapa-de-sala-1da4c.firebasestorage.app",
+    messagingSenderId: "627169156398",
+    appId: "1:627169156398:web:3b10e71cf952c44cb6aebf"
+  };
+  function isFirebaseConfigured(){
+    return FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey.indexOf('COLE_AQUI') === -1 &&
+      FIREBASE_CONFIG.databaseURL && FIREBASE_CONFIG.databaseURL.indexOf('SEU-PROJETO') === -1;
+  }
+  function makeFirebaseStore(){
+    try{
+      if (typeof firebase === 'undefined') return null;
+      if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+      var db = firebase.database();
+      var root = 'mapaDeSalaIldaFerreira/';
+      return {
+        get: function(key){
+          return db.ref(root+key).once('value').then(function(snap){
+            var v = snap.val();
+            return (v===null || v===undefined) ? null : { key:key, value:v, shared:true };
+          });
+        },
+        set: function(key, value){
+          return db.ref(root+key).set(value).then(function(){
+            return { key:key, value:value, shared:true };
+          });
+        },
+        delete: function(key){
+          return db.ref(root+key).remove().then(function(){
+            return { key:key, deleted:true, shared:true };
+          });
+        }
+      };
+    } catch(e){ console.warn('Firebase indisponível:', e); return null; }
+  }
+
   /* ============ STORAGE LAYER (com fallback) ============ */
-  // Em alguns ambientes (arquivo aberto direto no navegador, fora do Claude.ai)
-  // a API window.storage não existe. Este bloco detecta isso e usa localStorage
-  // do navegador; se nem isso estiver disponível, usa memória (não persiste).
+  // Prioridade: 1) Firebase (se configurado acima, compartilhado entre todos)
+  //             2) window.storage (Claude.ai)  3) localStorage do navegador  4) memória
   var STORAGE_MODE = 'cloud';
 
   function makeMemoryStore(){
@@ -734,14 +783,20 @@
 
   var STORE;
   var STORE_VERIFIED = false;
-  if (typeof window.storage !== 'undefined' && window.storage && typeof window.storage.get === 'function'){
-    STORE = window.storage;
-    STORAGE_MODE = 'cloud';
-  } else {
-    var ls = makeLocalStorageStore();
-    if (ls){ STORE = ls; STORAGE_MODE = 'local'; }
-    else { STORE = makeMemoryStore(); STORAGE_MODE = 'memory'; }
-    STORE_VERIFIED = true;
+  if (isFirebaseConfigured()){
+    var fbStore = makeFirebaseStore();
+    if (fbStore){ STORE = fbStore; STORAGE_MODE = 'firebase'; }
+  }
+  if (!STORE){
+    if (typeof window.storage !== 'undefined' && window.storage && typeof window.storage.get === 'function'){
+      STORE = window.storage;
+      STORAGE_MODE = 'cloud';
+    } else {
+      var ls = makeLocalStorageStore();
+      if (ls){ STORE = ls; STORAGE_MODE = 'local'; }
+      else { STORE = makeMemoryStore(); STORAGE_MODE = 'memory'; }
+      STORE_VERIFIED = true;
+    }
   }
 
   function withTimeout(promise, ms){
@@ -758,24 +813,28 @@
     });
   }
 
-  // Se STORE veio de window.storage (ex.: extensão do Claude instalada no navegador,
-  // mas página aberta fora do Claude.ai), ele pode ficar pendurado sem nunca responder.
-  // Testamos uma vez com prazo curto; se não responder, trocamos para o armazenamento local.
+  // Se o STORE escolhido (Firebase ou window.storage) não responder a tempo — sem
+  // internet, config errada, regras do banco bloqueando, extensão sem sessão ativa —
+  // trocamos automaticamente para o armazenamento local, para o app nunca travar.
   function downgradeStore(){
     if (STORE_VERIFIED) return;
     STORE_VERIFIED = true;
+    var wasFirebase = (STORAGE_MODE === 'firebase');
     var ls = makeLocalStorageStore();
     STORE = ls || makeMemoryStore();
     STORAGE_MODE = ls ? 'local' : 'memory';
-    showToast('Usando armazenamento local deste navegador.');
+    showToast(wasFirebase
+      ? 'Não foi possível conectar ao banco compartilhado — usando armazenamento local deste navegador.'
+      : 'Usando armazenamento local deste navegador.');
     homeState.turno = '';
     homeState.turma = '';
     renderMain();
   }
   function ensureStoreVerified(){
-    if (STORE_VERIFIED || STORAGE_MODE !== 'cloud') return Promise.resolve();
-    return withTimeout(STORE.get('__ping__'), 2500).then(function(){
+    if (STORE_VERIFIED || (STORAGE_MODE !== 'cloud' && STORAGE_MODE !== 'firebase')) return Promise.resolve();
+    return withTimeout(STORE.get('__ping__'), 4000).then(function(){
       STORE_VERIFIED = true;
+      if (STORAGE_MODE === 'firebase') showToast('Conectado ao banco de dados compartilhado ✓');
     }).catch(function(){
       downgradeStore();
     });
@@ -797,7 +856,7 @@
       STORE_VERIFIED = true;
       return res ? res.value : null;
     }).catch(function(err){
-      if (STORAGE_MODE === 'cloud' && !STORE_VERIFIED) downgradeStore();
+      if ((STORAGE_MODE === 'cloud' || STORAGE_MODE === 'firebase') && !STORE_VERIFIED) downgradeStore();
       return null;
     });
   }
@@ -807,7 +866,7 @@
       return res;
     }).catch(function(err){
       console.error('Erro ao salvar', key, err);
-      if (STORAGE_MODE === 'cloud' && !STORE_VERIFIED) downgradeStore();
+      if ((STORAGE_MODE === 'cloud' || STORAGE_MODE === 'firebase') && !STORE_VERIFIED) downgradeStore();
       return null;
     });
   }
@@ -1524,6 +1583,20 @@
   }
 
   /* ============ INIT ============ */
+  window.mapaDeSalaDebug = function(){
+    var info = {
+      modoDeArmazenamento: STORAGE_MODE,
+      storeVerificado: STORE_VERIFIED,
+      firebaseConfigPreenchida: isFirebaseConfigured(),
+      firebaseSdkCarregado: (typeof firebase !== 'undefined'),
+      urlDaPagina: location.href
+    };
+    console.log('[Mapa de Sala] Diagnóstico:', info);
+    return info;
+  };
+  console.log('[Mapa de Sala] Digite mapaDeSalaDebug() no console para diagnosticar o armazenamento.');
+  console.log('[Mapa de Sala] Modo de armazenamento ativo no carregamento:', STORAGE_MODE, '| Firebase configurado:', isFirebaseConfigured());
+
   document.addEventListener('click', function(e){
     var insideEditWrap = e.target.closest && e.target.closest('.edit-wrap');
     if (!insideEditWrap){
@@ -1541,7 +1614,7 @@
     setTimeout(function(){
       showToast('Atenção: este navegador não permite salvar dados — os mapas serão perdidos ao fechar a página.');
     }, 600);
-  } else if (STORAGE_MODE === 'cloud'){
+  } else if (STORAGE_MODE === 'cloud' || STORAGE_MODE === 'firebase'){
     // Verifica em segundo plano, sem travar a tela, se o armazenamento realmente responde.
     ensureStoreVerified();
   }

@@ -359,6 +359,10 @@
     background:#E5544B; border-color:#8C2A22; color:#fff;
     box-shadow: inset 0 0 0 2px rgba(0,0,0,.12);
   }
+  .btn-tag-swap.active{
+    background: var(--navy-dark); border-color: var(--navy-dark2); color:#fff;
+    box-shadow: inset 0 0 0 2px rgba(0,0,0,.12);
+  }
 
   .room-canvas{
     position:relative;
@@ -586,6 +590,15 @@
   }
   .desk.tag-atrapalha .name{ color:#fff; }
   .desk.tag-atrapalha .name.empty{ color: rgba(255,255,255,.85); }
+  .desk.swap-selected{
+    outline: 3px dashed var(--navy-dark);
+    box-shadow: 0 0 0 5px rgba(58,90,135,.35);
+    animation: swap-pulse 1s ease-in-out infinite;
+  }
+  @keyframes swap-pulse{
+    0%, 100% { box-shadow: 0 0 0 5px rgba(58,90,135,.35); }
+    50% { box-shadow: 0 0 0 9px rgba(58,90,135,.15); }
+  }
   .room-canvas.tag-picking .seat{ cursor: crosshair; }
   .seat .idx{
     font-size:9px; color: var(--ink-soft); opacity:.7; letter-spacing:.5px;
@@ -1273,6 +1286,7 @@
       }).length;
       var uiState = roomUiState[tab.id] || (roomUiState[tab.id] = { editOpen: false, tagMode: null });
       if (typeof uiState.tagMode === 'undefined') uiState.tagMode = null;
+      if (typeof uiState.swapFirstKey === 'undefined') uiState.swapFirstKey = null;
 
       wrap.innerHTML =
         '<div class="toolbar">' +
@@ -1320,9 +1334,10 @@
             '<span class="tag-buttons">' +
               '<button type="button" class="btn-tag btn-tag-aee'+(uiState.tagMode==='aee'?' active':'')+'" id="btn-tag-aee">🟡 Aluno AEE</button>' +
               '<button type="button" class="btn-tag btn-tag-atrapalha'+(uiState.tagMode==='atrapalha'?' active':'')+'" id="btn-tag-atrapalha">🔴 Ponto de Atenção</button>' +
+              '<button type="button" class="btn-tag btn-tag-swap'+(uiState.tagMode==='swap'?' active':'')+'" id="btn-tag-swap">🔁 Trocar lugar</button>' +
             '</span>' +
           '</div>' +
-          '<p class="editor-hint">Com a sala em edição, você pode editar nomes, excluir ou recolocar mesas individuais no mapa. Para marcar um aluno, clique em "Aluno AEE" ou "Ponto de Atenção" e depois na mesa dele — clique de novo na mesma mesa para remover a marcação.</p>' +
+          '<p class="editor-hint">Com a sala em edição, você pode editar nomes, excluir ou recolocar mesas individuais no mapa. Para marcar um aluno, clique em "Aluno AEE" ou "Ponto de Atenção" e depois na mesa dele — clique de novo na mesma mesa para remover a marcação. Para trocar dois alunos de lugar, clique em "Trocar lugar" e depois nas duas mesas que vão trocar.</p>' +
         '</div>' +
         '<p class="scroll-hint">↔ Arraste para o lado para ver a sala inteira</p>' +
         '<div class="canvas-scroll">' +
@@ -1373,14 +1388,19 @@
 
       var btnTagAee = wrap.querySelector('#btn-tag-aee');
       var btnTagAtrapalha = wrap.querySelector('#btn-tag-atrapalha');
+      var btnTagSwap = wrap.querySelector('#btn-tag-swap');
       function setTagMode(mode){
         uiState.tagMode = (uiState.tagMode === mode) ? null : mode;
+        uiState.swapFirstKey = null;
+        wrap.querySelectorAll('.desk.swap-selected').forEach(function(d){ d.classList.remove('swap-selected'); });
         btnTagAee.classList.toggle('active', uiState.tagMode === 'aee');
         btnTagAtrapalha.classList.toggle('active', uiState.tagMode === 'atrapalha');
+        btnTagSwap.classList.toggle('active', uiState.tagMode === 'swap');
         roomCanvas.classList.toggle('tag-picking', !!uiState.tagMode);
       }
       btnTagAee.addEventListener('click', function(e){ e.stopPropagation(); setTagMode('aee'); });
       btnTagAtrapalha.addEventListener('click', function(e){ e.stopPropagation(); setTagMode('atrapalha'); });
+      btnTagSwap.addEventListener('click', function(e){ e.stopPropagation(); setTagMode('swap'); });
 
       wrap.querySelector('#btn-print').addEventListener('click', function(){ window.print(); });
       wrap.querySelectorAll('[data-adj]').forEach(function(btn){
@@ -1464,6 +1484,29 @@
         if (!canvas || !canvas.classList.contains('edit-mode')) return; // só edita/marca em modo edição
         var state = roomUiState[tab.id];
         var tagMode = state && state.tagMode;
+        if (tagMode === 'swap'){
+          var kSwap = this.getAttribute('data-key');
+          if (!state.swapFirstKey){
+            state.swapFirstKey = kSwap;
+            this.classList.add('swap-selected');
+          } else if (state.swapFirstKey === kSwap){
+            this.classList.remove('swap-selected');
+            state.swapFirstKey = null;
+          } else {
+            var k1 = state.swapFirstKey, k2 = kSwap;
+            var tmpSeat = layout.seats[k1];
+            if (layout.seats[k2]) layout.seats[k1] = layout.seats[k2]; else delete layout.seats[k1];
+            if (tmpSeat) layout.seats[k2] = tmpSeat; else delete layout.seats[k2];
+            var tmpTag = layout.tags[k1];
+            if (layout.tags[k2]) layout.tags[k1] = layout.tags[k2]; else delete layout.tags[k1];
+            if (tmpTag) layout.tags[k2] = tmpTag; else delete layout.tags[k2];
+            state.swapFirstKey = null;
+            saveLayoutDebounced(tab.turno, tab.turma);
+            buildDesksGrid(wrap, tab, layout);
+            showToast('Lugares trocados!');
+          }
+          return;
+        }
         if (tagMode){
           var k = this.getAttribute('data-key');
           if (layout.tags[k] === tagMode) delete layout.tags[k];
